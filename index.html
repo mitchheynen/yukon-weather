@@ -389,21 +389,47 @@
       return `${endpoints.archive}?${params.toString()}`;
     }
 
-    function avg(values) { const v = values.filter(Number.isFinite); return v.length ? v.reduce((a,b)=>a+b,0)/v.length : null; }
-    function max(values) { const v = values.filter(Number.isFinite); return v.length ? Math.max(...v) : null; }
-    function min(values) { const v = values.filter(Number.isFinite); return v.length ? Math.min(...v) : null; }
-    function round(value, digits = 0) { return Number.isFinite(value) ? Number(value).toFixed(digits) : "--"; }
-
-    function wxCodeToText(code) {
-      const map = {0:["☀️","Clear"],1:["🌤️","Mainly clear"],2:["⛅","Partly cloudy"],3:["☁️","Overcast"],45:["🌫️","Fog"],48:["🌫️","Rime fog"],51:["🌦️","Light drizzle"],53:["🌦️","Drizzle"],55:["🌧️","Dense drizzle"],61:["🌦️","Light rain"],63:["🌧️","Rain"],65:["🌧️","Heavy rain"],71:["🌨️","Light snow"],73:["🌨️","Snow"],75:["❄️","Heavy snow"],80:["🌦️","Rain showers"],81:["🌧️","Showers"],82:["⛈️","Violent showers"],85:["🌨️","Snow showers"],86:["❄️","Heavy snow showers"],95:["⛈️","Thunderstorm"]};
-      return map[code] || ["🌡️","Variable"];
+    function avg(values) {
+      const v = values.filter(Number.isFinite);
+      return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null;
+    }
+    function max(values) {
+      const v = values.filter(Number.isFinite);
+      return v.length ? Math.max(...v) : null;
+    }
+    function min(values) {
+      const v = values.filter(Number.isFinite);
+      return v.length ? Math.min(...v) : null;
+    }
+    function round(value, digits = 0) {
+      return Number.isFinite(value) ? Number(value).toFixed(digits) : "--";
+    }
+    function safeText(id, text) {
+      const el = document.getElementById(id);
+      if (el) el.textContent = text;
+    }
+    function isoDate(date) {
+      return date.toISOString().slice(0, 10);
+    }
+    function formatDayLabel(iso) {
+      return new Date(iso).toLocaleDateString([], { weekday: "short" });
+    }
+    function formatDateLabel(iso) {
+      return new Date(iso).toLocaleDateString([], { month: "short", day: "numeric" });
+    }
+    function formatHourLabel(iso) {
+      return new Date(iso).toLocaleTimeString([], { hour: "numeric" });
+    }
+    function formatDateTime(iso) {
+      return new Date(iso).toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
     }
 
-    function formatDayLabel(iso) { return new Date(iso).toLocaleDateString([], { weekday: "short" }); }
-    function formatDateLabel(iso) { return new Date(iso).toLocaleDateString([], { month: "short", day: "numeric" }); }
-    function formatHourLabel(iso) { return new Date(iso).toLocaleTimeString([], { hour: "numeric" }); }
-    function formatDateTime(iso) { return new Date(iso).toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }); }
-    function isoDate(date) { return date.toISOString().slice(0, 10); }
+    function wxCodeToText(code) {
+      const map = {
+        0:["☀️","Clear"],1:["🌤️","Mainly clear"],2:["⛅","Partly cloudy"],3:["☁️","Overcast"],45:["🌫️","Fog"],48:["🌫️","Rime fog"],51:["🌦️","Light drizzle"],53:["🌦️","Drizzle"],55:["🌧️","Dense drizzle"],61:["🌦️","Light rain"],63:["🌧️","Rain"],65:["🌧️","Heavy rain"],71:["🌨️","Light snow"],73:["🌨️","Snow"],75:["❄️","Heavy snow"],80:["🌦️","Rain showers"],81:["🌧️","Showers"],82:["⛈️","Violent showers"],85:["🌨️","Snow showers"],86:["❄️","Heavy snow showers"],95:["⛈️","Thunderstorm"]
+      };
+      return map[code] || ["🌡️","Variable"];
+    }
 
     function confidenceFromSpread(spread) {
       if (!Number.isFinite(spread)) return { label: "Unknown", color: "#94a3b8" };
@@ -413,36 +439,38 @@
     }
 
     function computeConsensus(models) {
-      const dailyLength = models[0].daily.time.length;
-      const hourlyLength = Math.min(...models.map(m => m.hourly.time.length), 48);
+      const validModels = models.filter(m => m && m.daily && m.hourly);
+      if (!validModels.length) return null;
+      const dailyLength = validModels[0].daily.time.length;
+      const hourlyLength = Math.min(...validModels.map(m => m.hourly.time.length), 48);
       const daily = Array.from({ length: dailyLength }, (_, i) => {
-        const highs = models.map(m => m.daily.temperature_2m_max[i]);
-        const lows = models.map(m => m.daily.temperature_2m_min[i]);
-        const precip = models.map(m => m.daily.precipitation_sum[i]);
-        const snow = models.map(m => m.daily.snowfall_sum[i]);
-        const pop = models.map(m => m.daily.precipitation_probability_max[i]);
-        const wind = models.map(m => m.daily.wind_speed_10m_max[i]);
+        const highs = validModels.map(m => m.daily.temperature_2m_max[i]);
+        const lows = validModels.map(m => m.daily.temperature_2m_min[i]);
+        const precip = validModels.map(m => m.daily.precipitation_sum[i]);
+        const snow = validModels.map(m => m.daily.snowfall_sum[i]);
+        const pop = validModels.map(m => m.daily.precipitation_probability_max[i]);
+        const wind = validModels.map(m => m.daily.wind_speed_10m_max[i]);
         const spread = (max(highs) ?? 0) - (min(highs) ?? 0);
         return {
-          time: models[0].daily.time[i],
+          time: validModels[0].daily.time[i],
           high: avg(highs),
           low: avg(lows),
           precip: avg(precip),
           snow: avg(snow),
           pop: avg(pop),
           wind: avg(wind),
-          code: models[0].daily.weather_code[i],
+          code: validModels[0].daily.weather_code[i],
           spread,
           confidence: confidenceFromSpread(spread)
         };
       });
       const hourly = Array.from({ length: hourlyLength }, (_, i) => ({
-        time: models[0].hourly.time[i],
-        temperature: avg(models.map(m => m.hourly.temperature_2m[i])),
-        pop: avg(models.map(m => m.hourly.precipitation_probability[i])),
-        precipitation: avg(models.map(m => m.hourly.precipitation[i])),
-        wind: avg(models.map(m => m.hourly.wind_speed_10m[i])),
-        gust: avg(models.map(m => m.hourly.wind_gusts_10m[i]))
+        time: validModels[0].hourly.time[i],
+        temperature: avg(validModels.map(m => m.hourly.temperature_2m[i])),
+        pop: avg(validModels.map(m => m.hourly.precipitation_probability[i])),
+        precipitation: avg(validModels.map(m => m.hourly.precipitation[i])),
+        wind: avg(validModels.map(m => m.hourly.wind_speed_10m[i])),
+        gust: avg(validModels.map(m => m.hourly.wind_gusts_10m[i]))
       }));
       return { daily, hourly };
     }
@@ -468,8 +496,8 @@
       for (const target of targets) {
         try {
           html = await getText(target);
-          if (html && html.includes("Snow Depth")) break;
-        } catch (e) {}
+          if (html && html.length > 1000) break;
+        } catch (_) {}
       }
       if (!html) throw new Error("Unable to access MeteoWhitehorse from this browser session");
 
@@ -483,19 +511,18 @@
       };
 
       return {
-        temperature: extractWhole(/-?\d+(?:\.\d+)?°C(?=[\s\S]*?Feels like)/i),
+        temperature: extractWhole(/-?\d+(?:\.\d+)?°C(?=[\s\S]{0,200}?Feels like)/i),
         feelsLike: extract(/Feels like:\s*([\-\d.]+°C)/i),
-        summary: extract(/Summary \/ Temperature Wind Snow Outlook[\s\S]*?Image:[^\]]*\]\s*([^<\n]+)\s*[\r\n]/i),
-        windDir: extract(/Image: Wind from ([A-Z]+)/i),
-        windSpeed: extract(/Image: Wind from [A-Z]+[\s\S]*?([\d.]+)\s*Gust:/i),
+        summary: extract(/EC forecast:\s*([^<\n]+)/i),
+        windDir: extract(/Wind from ([A-Z]+)/i),
+        windSpeed: extract(/Wind from [A-Z]+[\s\S]{0,80}?([\d.]+)\s*km\/h/i),
         gust: extract(/Gust:\s*([\d.]+)\s*km\/h/i),
         snowDepth: extract(/Snow Depth:\s*([\d.]+)\s*cm/i),
         winterTotal: extract(/Winter Total:\s*([\d.]+)\s*cm/i),
         humidity: extract(/Humidity:\s*([\d.]+)\s*%/i),
         dewPoint: extract(/Dew Point:\s*([\-\d.]+°C)/i),
         pressure: extract(/Barometer:\s*([\d.]+)\s*hPa/i),
-        updated: extract(/Updated:\s*@\s*([^<\n]+)/i),
-        outlook: extract(/EC forecast:\s*([^<\n]+)/i)
+        updated: extract(/Updated:\s*@\s*([^<\n]+)/i)
       };
     }
 
@@ -514,45 +541,46 @@
     }
 
     function renderCurrent(best, consensus, mw) {
+      if (!best || !consensus) return;
       const current = best.current;
       const next24 = consensus.hourly.slice(0, 24);
       const avgPop = avg(next24.map(x => x.pop));
       const totalPrecip = next24.reduce((sum, x) => sum + (x.precipitation || 0), 0);
       const [emoji, text] = wxCodeToText(current.weather_code);
-      document.getElementById("current-temp").textContent = `${round(current.temperature_2m, 0)}°`;
+      safeText("current-temp", `${round(current.temperature_2m, 0)}°`);
       const mwText = mw?.snowDepth ? ` MeteoWhitehorse snow depth is ${mw.snowDepth} cm.` : "";
-      document.getElementById("current-summary").textContent = `${emoji} ${text}. Preserve consensus today is about ${round(consensus.daily[0].high, 0)}° / ${round(consensus.daily[0].low, 0)}°, around ${round(consensus.daily[0].precip, 1)} mm precipitation, and ${round(consensus.daily[0].wind, 0)} km/h peak wind.${mwText}`;
-      document.getElementById("feels-like").textContent = `${round(current.apparent_temperature, 0)}°`;
-      document.getElementById("wind-now").textContent = `${round(current.wind_speed_10m, 0)} km/h`;
-      document.getElementById("wind-gust").textContent = `Gusts ${round(current.wind_gusts_10m, 0)} km/h`;
-      document.getElementById("precip-risk").textContent = `${round(avgPop, 0)}%`;
-      document.getElementById("precip-note").textContent = `About ${round(totalPrecip, 1)} mm expected in the next 24 hours`;
-      document.getElementById("cloud-pressure").textContent = `${round(current.cloud_cover, 0)}% clouds · ${round(current.surface_pressure, 0)} hPa`;
-      document.getElementById("last-updated").textContent = `Updated ${formatDateTime(current.time)}`;
+      safeText("current-summary", `${emoji} ${text}. Preserve consensus today is about ${round(consensus.daily[0].high, 0)}° / ${round(consensus.daily[0].low, 0)}°, around ${round(consensus.daily[0].precip, 1)} mm precipitation, and ${round(consensus.daily[0].wind, 0)} km/h peak wind.${mwText}`);
+      safeText("feels-like", `${round(current.apparent_temperature, 0)}°`);
+      safeText("wind-now", `${round(current.wind_speed_10m, 0)} km/h`);
+      safeText("wind-gust", `Gusts ${round(current.wind_gusts_10m, 0)} km/h`);
+      safeText("precip-risk", `${round(avgPop, 0)}%`);
+      safeText("precip-note", `About ${round(totalPrecip, 1)} mm expected in the next 24 hours`);
+      safeText("cloud-pressure", `${round(current.cloud_cover, 0)}% clouds · ${round(current.surface_pressure, 0)} hPa`);
+      safeText("last-updated", `Updated ${formatDateTime(current.time)}`);
     }
 
     function renderMeteoWhitehorse(data) {
       if (!data) {
-        document.getElementById("mw-condition").textContent = "Could not retrieve MeteoWhitehorse in this browser session.";
+        safeText("mw-condition", "Could not retrieve MeteoWhitehorse in this browser session.");
         return;
       }
-      document.getElementById("mw-temp").textContent = data.temperature || "--";
-      document.getElementById("mw-condition").textContent = data.outlook || data.summary || "Local Whitehorse observation feed";
-      document.getElementById("mw-wind").textContent = data.windSpeed ? `${data.windDir || ""} ${data.windSpeed} km/h`.trim() : "--";
-      document.getElementById("mw-gust").textContent = data.gust ? `Gust ${data.gust} km/h` : "Gust --";
-      document.getElementById("mw-snow-depth").textContent = data.snowDepth ? `${data.snowDepth} cm` : "--";
-      document.getElementById("mw-snow-total").textContent = data.winterTotal ? `Winter total ${data.winterTotal} cm` : "Winter total --";
-      document.getElementById("mw-humidity").textContent = data.humidity ? `${data.humidity}%` : "--";
-      document.getElementById("mw-dewpoint").textContent = data.dewPoint ? `Dew point ${data.dewPoint}` : "Dew point --";
-      document.getElementById("mw-pressure").textContent = data.pressure ? `${data.pressure} hPa` : "--";
-      document.getElementById("mw-updated").textContent = data.updated ? `Updated ${data.updated}` : "Update time unavailable";
+      safeText("mw-temp", data.temperature || "--");
+      safeText("mw-condition", data.summary || "Local Whitehorse observation feed");
+      safeText("mw-wind", data.windSpeed ? `${data.windDir || ""} ${data.windSpeed} km/h`.trim() : "--");
+      safeText("mw-gust", data.gust ? `Gust ${data.gust} km/h` : "Gust --");
+      safeText("mw-snow-depth", data.snowDepth ? `${data.snowDepth} cm` : "--");
+      safeText("mw-snow-total", data.winterTotal ? `Winter total ${data.winterTotal} cm` : "Winter total --");
+      safeText("mw-humidity", data.humidity ? `${data.humidity}%` : "--");
+      safeText("mw-dewpoint", data.dewPoint ? `Dew point ${data.dewPoint}` : "Dew point --");
+      safeText("mw-pressure", data.pressure ? `${data.pressure} hPa` : "--");
+      safeText("mw-updated", data.updated ? `Updated ${data.updated}` : "Update time unavailable");
     }
 
     function renderStations(stations, metar, mw) {
       const items = [];
-      if (mw) items.push({ title: "MeteoWhitehorse", temp: mw.temperature || "--", a: mw.outlook || mw.summary || "Local observation", b: mw.snowDepth ? `Snow depth ${mw.snowDepth} cm` : "Snow depth unavailable", c: mw.pressure ? `${mw.pressure} hPa` : "Pressure unavailable" });
+      if (mw) items.push({ title: "MeteoWhitehorse", temp: mw.temperature || "--", a: mw.summary || "Local observation", b: mw.snowDepth ? `Snow depth ${mw.snowDepth} cm` : "Snow depth unavailable", c: mw.pressure ? `${mw.pressure} hPa` : "Pressure unavailable" });
       if (metar) items.push({ title: "Whitehorse Airport METAR", temp: Number.isFinite(metar.tempC) ? `${round(metar.tempC,0)}°C` : "--", a: metar.windKts != null ? `Wind ${round(metar.windKts * 1.852,0)} km/h` : "Wind unavailable", b: metar.visMi != null ? `Visibility ${metar.visMi} mi` : "Visibility unavailable", c: metar.obsTime ? `Obs ${formatDateTime(metar.obsTime)}` : "Airport observation" });
-      stations.forEach(st => {
+      stations.filter(Boolean).forEach(st => {
         const [emoji, text] = wxCodeToText(st.current.weather_code);
         items.push({ title: st.name, temp: `${round(st.current.temperature_2m,0)}°C`, a: `${emoji} ${text}`, b: `Wind ${round(st.current.wind_speed_10m,0)} km/h`, c: `Pressure ${round(st.current.surface_pressure,0)} hPa` });
       });
@@ -566,6 +594,7 @@
     }
 
     function renderDaily(consensus) {
+      if (!consensus) return;
       document.getElementById("forecast-grid").innerHTML = consensus.daily.map(day => {
         const [emoji, text] = wxCodeToText(day.code);
         return `
@@ -580,6 +609,7 @@
     }
 
     function renderInsights(consensus, mw, metar) {
+      if (!consensus) return;
       const warmest = [...consensus.daily].sort((a,b)=>(b.high??-999)-(a.high??-999))[0];
       const wettest = [...consensus.daily].sort((a,b)=>(b.precip??-999)-(a.precip??-999))[0];
       const windiest = [...consensus.daily].sort((a,b)=>(b.wind??-999)-(a.wind??-999))[0];
@@ -590,7 +620,7 @@
         { title: "Wettest signal", body: `${formatDayLabel(wettest.time)} currently has the strongest precipitation signal at roughly ${round(wettest.precip,1)} mm.` },
         { title: "Wind watch", body: `${formatDayLabel(windiest.time)} has the highest modeled wind at about ${round(windiest.wind,0)} km/h.` }
       ];
-      if (mw?.snowDepth) notes.push({ title: "Observed snow depth", body: `MeteoWhitehorse is reporting snow depth near ${mw.snowDepth} cm, which is a useful Whitehorse-area ground-truth reference.` });
+      if (mw?.snowDepth) notes.push({ title: "Observed snow depth", body: `MeteoWhitehorse is reporting snow depth near ${mw.snowDepth} cm.` });
       if (metar?.raw) notes.push({ title: "Airport observation", body: `Latest CYXY METAR: ${metar.raw}` });
       document.getElementById("insight-list").innerHTML = notes.map(n => `<div class="insight"><strong>${n.title}</strong><div>${n.body}</div></div>`).join("");
     }
@@ -598,7 +628,7 @@
     function renderModelTable(models) {
       const body = document.getElementById("model-table");
       body.innerHTML = "";
-      models.forEach(model => {
+      models.filter(Boolean).forEach(model => {
         for (let i = 0; i < Math.min(3, model.daily.time.length); i++) {
           const row = document.createElement("tr");
           row.innerHTML = `<td>${formatDayLabel(model.daily.time[i])}</td><td>${model.label}</td><td>${round(model.daily.temperature_2m_max[i],0)}°</td><td>${round(model.daily.temperature_2m_min[i],0)}°</td><td>${round(model.daily.precipitation_sum[i],1)} mm</td><td>${round(model.daily.snowfall_sum[i],1)} cm</td><td>${round(model.daily.wind_speed_10m_max[i],0)} km/h</td>`;
@@ -621,15 +651,25 @@
 
     function drawLineChart(canvasId, series, labels, opts = {}) {
       const canvas = document.getElementById(canvasId);
+      const filteredSeries = series.filter(s => s.values.some(Number.isFinite));
+      if (!filteredSeries.length || !labels.length) {
+        const { ctx, height } = setupCanvas(canvas);
+        ctx.fillStyle = "rgba(168,183,203,.92)";
+        ctx.font = "14px Inter, sans-serif";
+        ctx.fillText("No data available", 20, height / 2);
+        return;
+      }
+
       const { ctx, width, height } = setupCanvas(canvas);
-      const pad = { top: 20, right: 18, bottom: 42, left: 42 };
+      const pad = { top: 20, right: 18, bottom: 42, left: 46 };
       const innerW = width - pad.left - pad.right;
       const innerH = height - pad.top - pad.bottom;
-      const allY = series.flatMap(s => s.values.filter(Number.isFinite));
-      const minY = opts.minY != null ? opts.minY : Math.floor(Math.min(...allY, 0));
-      const maxY = opts.maxY != null ? opts.maxY : Math.ceil(Math.max(...allY, 1));
+      const allY = filteredSeries.flatMap(s => s.values.filter(Number.isFinite));
+      let minY = opts.minY != null ? opts.minY : Math.floor(Math.min(...allY));
+      let maxY = opts.maxY != null ? opts.maxY : Math.ceil(Math.max(...allY));
+      if (minY === maxY) maxY = minY + 1;
       const x = i => pad.left + (innerW * i / Math.max(1, labels.length - 1));
-      const y = v => pad.top + (maxY - v) / Math.max(1, (maxY - minY)) * innerH;
+      const y = v => pad.top + (maxY - v) / (maxY - minY) * innerH;
 
       ctx.strokeStyle = "rgba(148,163,184,.18)";
       ctx.lineWidth = 1;
@@ -638,45 +678,39 @@
       for (let i = 0; i <= 4; i++) {
         const yy = pad.top + innerH * i / 4;
         const value = maxY - ((maxY - minY) * i / 4);
-        ctx.beginPath(); ctx.moveTo(pad.left, yy); ctx.lineTo(width - pad.right, yy); ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(pad.left, yy);
+        ctx.lineTo(width - pad.right, yy);
+        ctx.stroke();
         ctx.fillText(`${round(value,0)}${opts.unit || ""}`, 6, yy + 4);
       }
 
-      series.forEach(s => {
+      filteredSeries.forEach(s => {
         ctx.strokeStyle = s.color;
         ctx.lineWidth = s.width || 2.4;
         ctx.beginPath();
         let started = false;
         s.values.forEach((v, i) => {
           if (!Number.isFinite(v)) return;
-          if (!started) { ctx.moveTo(x(i), y(v)); started = true; }
-          else ctx.lineTo(x(i), y(v));
+          if (!started) {
+            ctx.moveTo(x(i), y(v));
+            started = true;
+          } else {
+            ctx.lineTo(x(i), y(v));
+          }
         });
         ctx.stroke();
       });
 
-      if (opts.areaSeries) {
-        const s = opts.areaSeries;
-        ctx.fillStyle = s.fill;
-        ctx.beginPath();
-        ctx.moveTo(x(0), y(s.values[0] || 0));
-        s.values.forEach((v, i) => ctx.lineTo(x(i), y(v || 0)));
-        ctx.lineTo(x(labels.length - 1), pad.top + innerH);
-        ctx.lineTo(x(0), pad.top + innerH);
-        ctx.closePath();
-        ctx.fill();
-      }
-
       labels.forEach((label, i) => {
         const step = opts.xStep || 6;
         if (i % step === 0 || i === labels.length - 1) {
-          ctx.fillStyle = "rgba(168,183,203,.92)";
           ctx.fillText(label, x(i) - 10, height - 14);
         }
       });
 
-      let legendX = width - 160;
-      series.forEach(s => {
+      let legendX = Math.max(60, width - (filteredSeries.length * 95) - 12);
+      filteredSeries.forEach(s => {
         ctx.fillStyle = s.color;
         ctx.fillRect(legendX, 12, 14, 3);
         ctx.fillStyle = "rgba(236,245,255,.95)";
@@ -686,20 +720,20 @@
     }
 
     function drawHourlyChart(consensus) {
+      if (!consensus) return;
       const data = consensus.hourly.slice(0, 48);
-      drawLineChart(
-        "hourly-chart",
-        [
-          { label: "Temp", values: data.map(d => d.temperature), color: "rgba(137,212,255,.96)" },
-          { label: "Wind", values: data.map(d => d.wind), color: "rgba(157,241,207,.95)" },
-          { label: "Pop", values: data.map(d => d.pop), color: "rgba(255,209,142,.95)" }
-        ],
-        data.map(d => formatHourLabel(d.time)),
-        { unit: "", xStep: 6 }
-      );
+      drawLineChart("hourly-chart", [
+        { label: "Temp", values: data.map(d => d.temperature), color: "rgba(137,212,255,.96)" },
+        { label: "Wind", values: data.map(d => d.wind), color: "rgba(157,241,207,.95)" },
+        { label: "Pop", values: data.map(d => d.pop), color: "rgba(255,209,142,.95)" }
+      ], data.map(d => formatHourLabel(d.time)), { xStep: 6 });
     }
 
     function drawSnowChart(points, observedSnowDepth) {
+      if (!points || !points.time || !points.snow_depth) {
+        drawLineChart("snow-chart", [], []);
+        return;
+      }
       const daily = [];
       for (let i = 0; i < points.time.length; i += 24) {
         const chunk = points.snow_depth.slice(i, i + 24).filter(Number.isFinite);
@@ -708,15 +742,14 @@
       const labels = daily.map(d => d.label);
       const modeled = daily.map(d => d.depth);
       const observed = daily.map((_, i) => i === daily.length - 1 && Number.isFinite(observedSnowDepth) ? observedSnowDepth : null);
-      drawLineChart(
-        "snow-chart",
-        [
-          { label: "Modeled", values: modeled, color: "rgba(137,212,255,.96)" },
-          { label: "Observed", values: observed, color: "rgba(255,209,142,.95)", width: 3.2 }
-        ],
-        labels,
-        { unit: " cm", xStep: 4, minY: 0 }
-      );
+      drawLineChart("snow-chart", [
+        { label: "Modeled", values: modeled, color: "rgba(137,212,255,.96)" },
+        { label: "Observed", values: observed, color: "rgba(255,209,142,.95)", width: 3.2 }
+      ], labels, { unit: " cm", xStep: 4, minY: 0 });
+    }
+
+    function settledValue(result) {
+      return result && result.status === "fulfilled" ? result.value : null;
     }
 
     async function loadWeather() {
@@ -726,67 +759,92 @@
       btn.textContent = "Refreshing…";
       pill.textContent = "Loading data…";
 
+      const today = new Date();
+      const start = new Date(today);
+      start.setDate(today.getDate() - 29);
+
+      const urls = {
+        preserveBest: buildForecastUrl(endpoints.best, config.preserve, 7),
+        preserveGem: buildForecastUrl(endpoints.gem, config.preserve, 7),
+        preserveEcmwf: buildForecastUrl(endpoints.ecmwf, config.preserve, 7),
+        preserveGfs: buildForecastUrl(endpoints.gfs, config.preserve, 7),
+        whitehorseNow: buildCurrentUrl(config.whitehorse),
+        airportNow: buildCurrentUrl(config.airport),
+        takhiniNow: buildCurrentUrl(config.takhini),
+        snowArchive: buildArchiveSnowUrl(config.preserve, isoDate(start), isoDate(today))
+      };
+
       try {
-        const preserveBestUrl = buildForecastUrl(endpoints.best, config.preserve, 7);
-        const preserveGemUrl = buildForecastUrl(endpoints.gem, config.preserve, 7);
-        const preserveEcmwfUrl = buildForecastUrl(endpoints.ecmwf, config.preserve, 7);
-        const preserveGfsUrl = buildForecastUrl(endpoints.gfs, config.preserve, 7);
-
-        const today = new Date();
-        const start = new Date(today);
-        start.setDate(today.getDate() - 29);
-        const snowArchiveUrl = buildArchiveSnowUrl(config.preserve, isoDate(start), isoDate(today));
-
-        const [best, gem, ecmwf, gfs, whitehorseNow, airportNow, takhiniNow, snowArchive, metarSettled, mwSettled] = await Promise.all([
-          getJson(preserveBestUrl),
-          getJson(preserveGemUrl),
-          getJson(preserveEcmwfUrl),
-          getJson(preserveGfsUrl),
-          getJson(buildCurrentUrl(config.whitehorse)),
-          getJson(buildCurrentUrl(config.airport)),
-          getJson(buildCurrentUrl(config.takhini)),
-          getJson(snowArchiveUrl),
-          fetchMetar().catch(() => null),
-          fetchMeteoWhitehorse().catch(() => null)
+        const results = await Promise.allSettled([
+          getJson(urls.preserveBest),
+          getJson(urls.preserveGem),
+          getJson(urls.preserveEcmwf),
+          getJson(urls.preserveGfs),
+          getJson(urls.whitehorseNow),
+          getJson(urls.airportNow),
+          getJson(urls.takhiniNow),
+          getJson(urls.snowArchive),
+          fetchMetar(),
+          fetchMeteoWhitehorse()
         ]);
 
+        const preserveBest = settledValue(results[0]);
+        const gem = settledValue(results[1]);
+        const ecmwf = settledValue(results[2]);
+        const gfs = settledValue(results[3]);
+        const whitehorseNow = settledValue(results[4]);
+        const airportNow = settledValue(results[5]);
+        const takhiniNow = settledValue(results[6]);
+        const snowArchive = settledValue(results[7]);
+        const metar = settledValue(results[8]);
+        const mw = settledValue(results[9]);
+
         const models = [
-          { label: "GEM", ...gem },
-          { label: "ECMWF", ...ecmwf },
-          { label: "GFS", ...gfs }
-        ];
+          gem ? { label: "GEM", ...gem } : null,
+          ecmwf ? { label: "ECMWF", ...ecmwf } : null,
+          gfs ? { label: "GFS", ...gfs } : null
+        ].filter(Boolean);
+
         const consensus = computeConsensus(models);
 
-        renderCurrent(best, consensus, mwSettled);
-        renderMeteoWhitehorse(mwSettled);
+        if (preserveBest && consensus) {
+          renderCurrent(preserveBest, consensus, mw);
+          renderDaily(consensus);
+          renderInsights(consensus, mw, metar);
+          drawHourlyChart(consensus);
+        } else {
+          safeText("current-summary", "Core Preserve forecast could not be loaded. Try refreshing again.");
+        }
+
+        renderMeteoWhitehorse(mw);
         renderStations([
-          { name: config.preserve.name, current: best.current },
-          { name: config.whitehorse.name, current: whitehorseNow.current },
-          { name: config.airport.name, current: airportNow.current },
-          { name: config.takhini.name, current: takhiniNow.current }
-        ], metarSettled, mwSettled);
-        renderDaily(consensus);
-        renderInsights(consensus, mwSettled, metarSettled);
+          preserveBest ? { name: config.preserve.name, current: preserveBest.current } : null,
+          whitehorseNow ? { name: config.whitehorse.name, current: whitehorseNow.current } : null,
+          airportNow ? { name: config.airport.name, current: airportNow.current } : null,
+          takhiniNow ? { name: config.takhini.name, current: takhiniNow.current } : null
+        ], metar, mw);
         renderModelTable(models);
-        drawHourlyChart(consensus);
-        drawSnowChart(snowArchive.hourly, mwSettled?.snowDepth ? Number(mwSettled.snowDepth) : null);
+        drawSnowChart(snowArchive?.hourly || null, mw?.snowDepth ? Number(mw.snowDepth) : null);
 
         const apiSummary = [
-          preserveBestUrl,
-          preserveGemUrl,
-          preserveEcmwfUrl,
-          preserveGfsUrl,
-          buildCurrentUrl(config.whitehorse),
-          buildCurrentUrl(config.airport),
-          buildCurrentUrl(config.takhini),
-          snowArchiveUrl,
+          urls.preserveBest,
+          urls.preserveGem,
+          urls.preserveEcmwf,
+          urls.preserveGfs,
+          urls.whitehorseNow,
+          urls.airportNow,
+          urls.takhiniNow,
+          urls.snowArchive,
           endpoints.metar,
           endpoints.meteoWhitehorse
         ].join("\n");
-        document.getElementById("api-summary").textContent = apiSummary;
-        pill.textContent = mwSettled ? "Forecast + local observations loaded" : "Forecast loaded · MeteoWhitehorse fallback";
+        safeText("api-summary", apiSummary);
+
+        const failed = results.filter(r => r.status === "rejected").length;
+        if (failed === 0) pill.textContent = "Forecast + local observations loaded";
+        else pill.textContent = `Loaded with ${failed} source issue${failed > 1 ? "s" : ""}`;
       } catch (error) {
-        document.getElementById("current-summary").textContent = `Could not load dashboard data: ${error.message}`;
+        safeText("current-summary", `Could not load dashboard data: ${error.message}`);
         pill.textContent = "Load error";
       } finally {
         btn.disabled = false;
@@ -801,12 +859,17 @@
         const btn = document.getElementById("copy-url-btn");
         const old = btn.textContent;
         btn.textContent = "Copied";
-        setTimeout(() => btn.textContent = old, 1200);
+        setTimeout(() => { btn.textContent = old; }, 1200);
       } catch (_) {}
     });
+
+    let resizeTimer = null;
     window.addEventListener("resize", () => {
-      clearTimeout(window.__weatherResizeTimer);
-      window.__weatherResizeTimer = setTimeout(loadWeather, 200);
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => {
+        const summary = document.getElementById("current-summary").textContent || "";
+        if (summary) loadWeather();
+      }, 300);
     });
 
     loadWeather();
