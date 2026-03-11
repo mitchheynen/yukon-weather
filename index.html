@@ -91,11 +91,12 @@
       box-shadow: none;
     }
 
-    .metric-grid, .chart-grid-2, .chart-grid-3 {
+    .metric-grid, .chart-grid-2, .chart-grid-3, .station-grid {
       display: grid;
       gap: 14px;
     }
     .metric-grid { grid-template-columns: minmax(260px,1.5fr) repeat(5,minmax(120px,1fr)); }
+    .station-grid { grid-template-columns: repeat(4, minmax(180px, 1fr)); }
     .chart-grid-2 { grid-template-columns: 1fr 1fr; }
     .chart-grid-3 { grid-template-columns: 1fr 1fr 1fr; }
 
@@ -127,7 +128,6 @@
     .chart-wrap.tall { height: 360px; }
     canvas { width: 100%; height: 100%; display: block; }
 
-    .legend-note { margin-top: 10px; color: var(--muted); font-size: .88rem; }
     .foot { color: var(--muted); font-size: .88rem; line-height: 1.5; }
     .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; word-break: break-word; }
 
@@ -135,9 +135,10 @@
       .metric-grid { grid-template-columns: repeat(3, minmax(150px, 1fr)); }
       .card.big { grid-column: 1 / -1; }
       .chart-grid-3 { grid-template-columns: 1fr 1fr; }
+      .station-grid { grid-template-columns: 1fr 1fr; }
     }
     @media (max-width: 900px) {
-      .chart-grid-2, .chart-grid-3 { grid-template-columns: 1fr; }
+      .chart-grid-2, .chart-grid-3, .station-grid { grid-template-columns: 1fr; }
       .metric-grid { grid-template-columns: 1fr 1fr; }
     }
     @media (max-width: 760px) {
@@ -153,7 +154,7 @@
       <div class="hero-top">
         <div>
           <h1>Yukon Wildlife Preserve Weather Trends Dashboard</h1>
-          <p class="subhead">A current-conditions dashboard for the Yukon Wildlife Preserve with trend charts for temperature, wind, precipitation probability, pressure, cloud cover, and humidity. MeteoWhitehorse has been removed to avoid source reliability issues.</p>
+          <p class="subhead">A current-conditions dashboard for the Yukon Wildlife Preserve with nearby station cards and trend charts for temperature, wind, precipitation probability, pressure, cloud cover, and humidity. MeteoWhitehorse remains removed for reliability.</p>
           <div class="pill-row">
             <span class="pill">Location: 60.8711, -135.3386</span>
             <span class="pill">Timezone: America/Whitehorse</span>
@@ -199,6 +200,16 @@
           <div class="muted small" id="last-updated">Waiting for data…</div>
         </div>
       </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <div>
+          <h2>Nearby station snapshot</h2>
+          <p class="muted">Quick comparison of current conditions at the Preserve, Whitehorse, Whitehorse Airport, and the Takhini / Hot Springs area.</p>
+        </div>
+      </div>
+      <div class="station-grid" id="station-grid"></div>
     </section>
 
     <div class="chart-grid-2">
@@ -281,11 +292,11 @@
       <div class="panel-head">
         <div>
           <h2>Notes</h2>
-          <p class="muted">The dashboard is intentionally simplified around one location and a series of trend charts. Nearby station cards, MeteoWhitehorse, and snow-depth elements have been removed.</p>
+          <p class="muted">The dashboard is centered on one main location and a series of trend charts, with nearby station cards returned for quick situational comparison.</p>
         </div>
       </div>
       <div class="foot">
-        <p><strong>Data source:</strong> Open-Meteo forecast and recent past data for the Yukon Wildlife Preserve point location.</p>
+        <p><strong>Data source:</strong> Open-Meteo forecast and recent past data for point locations around the Preserve.</p>
         <p><strong>Time window:</strong> 72 hours historical plus 72 hours forecast where available.</p>
         <p class="mono" id="api-summary"></p>
       </div>
@@ -295,7 +306,10 @@
   <script>
     const config = {
       timezone: "America/Whitehorse",
-      preserve: { name: "Yukon Wildlife Preserve", latitude: 60.871135, longitude: -135.33859 }
+      preserve: { name: "Yukon Wildlife Preserve", latitude: 60.871135, longitude: -135.33859 },
+      whitehorse: { name: "Whitehorse", latitude: 60.7212, longitude: -135.0568 },
+      airport: { name: "Whitehorse Airport", latitude: 60.7096, longitude: -135.0673 },
+      takhini: { name: "Takhini / Hot Springs area", latitude: 60.919, longitude: -135.185 }
     };
 
     const endpoint = "https://api.open-meteo.com/v1/forecast";
@@ -324,10 +338,10 @@
       "weather_code"
     ];
 
-    function buildUrl() {
+    function buildUrl(point = config.preserve) {
       const params = new URLSearchParams({
-        latitude: config.preserve.latitude,
-        longitude: config.preserve.longitude,
+        latitude: point.latitude,
+        longitude: point.longitude,
         timezone: config.timezone,
         past_days: "3",
         forecast_days: "4",
@@ -398,7 +412,7 @@
         return;
       }
 
-      const pad = { top: 20, right: 18, bottom: 48, left: 50 };
+      const pad = { top: 20, right: 18, bottom: 72, left: 50 };
       const innerW = width - pad.left - pad.right;
       const innerH = height - pad.top - pad.bottom;
       const allY = activeSeries.flatMap(s => s.values.filter(Number.isFinite));
@@ -439,12 +453,19 @@
         ctx.stroke();
       });
 
-      const step = opts.xStep || Math.max(1, Math.floor(labels.length / 6));
+      const step = opts.xStep || Math.max(1, Math.floor(labels.length / 5));
+      ctx.save();
       labels.forEach((label, i) => {
         if (i % step === 0 || i === labels.length - 1) {
-          ctx.fillText(label, x(i) - 20, height - 14);
+          const xpos = x(i);
+          const ypos = height - 14;
+          ctx.translate(xpos, ypos);
+          ctx.rotate(-0.65);
+          ctx.fillText(label, -18, 0);
+          ctx.setTransform(window.devicePixelRatio || 1, 0, 0, window.devicePixelRatio || 1, 0, 0);
         }
       });
+      ctx.restore();
 
       let legendX = 18;
       activeSeries.forEach(s => {
@@ -465,7 +486,7 @@
       const [emoji, text] = wxCodeToText(c.weather_code);
 
       safeText("current-temp", `${round(c.temperature_2m, 0)}°`);
-      safeText("current-summary", `${emoji} ${text}. This dashboard emphasizes how conditions are evolving over time rather than a multi-model outlook. Use the charts below to see recent change and short-term direction.`);
+      safeText("current-summary", `${emoji} ${text}. The charts below show how the main weather variables have changed recently and how they are expected to evolve over the near term.`);
       safeText("feels-like", `${round(c.apparent_temperature, 0)}°`);
       safeText("wind-now", `${round(c.wind_speed_10m, 0)} km/h`);
       safeText("wind-gust", `Gusts ${round(c.wind_gusts_10m, 0)} km/h`);
@@ -477,38 +498,53 @@
       safeText("last-updated", `Updated ${formatDateTime(c.time)}`);
     }
 
+    function renderStations(stations) {
+      document.getElementById("station-grid").innerHTML = stations.map(st => {
+        const [emoji, text] = wxCodeToText(st.current.weather_code);
+        return `
+          <article class="card">
+            <div class="label">${st.name}</div>
+            <div class="value-sm">${round(st.current.temperature_2m, 0)}°</div>
+            <div class="muted small">${emoji} ${text}</div>
+            <div class="muted small">Feels like ${round(st.current.apparent_temperature, 0)}°</div>
+            <div class="muted small">Wind ${round(st.current.wind_speed_10m, 0)} km/h · Gust ${round(st.current.wind_gusts_10m, 0)} km/h</div>
+            <div class="muted small">Humidity ${round(st.current.relative_humidity_2m, 0)}% · Pressure ${round(st.current.surface_pressure, 0)} hPa</div>
+          </article>`;
+      }).join("");
+    }
+
     function renderCharts(data) {
       const labels = data.hourly.time.map(formatHourLabel);
 
       drawLineChart("temperature-chart", [
         { label: "Temp", values: data.hourly.temperature_2m, color: "rgba(137,212,255,.96)" },
         { label: "Feels like", values: data.hourly.apparent_temperature, color: "rgba(194,181,255,.95)" }
-      ], labels, { unit: "°", xStep: 12 });
+      ], labels, { unit: "°", xStep: 18 });
 
       drawLineChart("wind-chart", [
         { label: "Wind", values: data.hourly.wind_speed_10m, color: "rgba(157,241,207,.95)" },
         { label: "Gusts", values: data.hourly.wind_gusts_10m, color: "rgba(255,209,142,.95)" }
-      ], labels, { unit: "", xStep: 12, minY: 0 });
+      ], labels, { minY: 0, xStep: 18 });
 
       drawLineChart("pop-chart", [
         { label: "PoP", values: data.hourly.precipitation_probability, color: "rgba(255,209,142,.95)" }
-      ], labels, { unit: "%", xStep: 12, minY: 0, maxY: 100 });
+      ], labels, { unit: "%", minY: 0, maxY: 100, xStep: 18 });
 
       drawLineChart("pressure-chart", [
         { label: "Pressure", values: data.hourly.surface_pressure, color: "rgba(137,212,255,.96)" }
-      ], labels, { unit: "", xStep: 12 });
+      ], labels, { xStep: 18 });
 
       drawLineChart("cloud-chart", [
         { label: "Cloud", values: data.hourly.cloud_cover, color: "rgba(194,181,255,.95)" }
-      ], labels, { unit: "%", xStep: 12, minY: 0, maxY: 100 });
+      ], labels, { unit: "%", minY: 0, maxY: 100, xStep: 18 });
 
       drawLineChart("humidity-chart", [
         { label: "Humidity", values: data.hourly.relative_humidity_2m, color: "rgba(157,241,207,.95)" }
-      ], labels, { unit: "%", xStep: 12, minY: 0, maxY: 100 });
+      ], labels, { unit: "%", minY: 0, maxY: 100, xStep: 18 });
 
       drawLineChart("precip-chart", [
         { label: "Precip", values: data.hourly.precipitation, color: "rgba(137,212,255,.96)" }
-      ], labels, { unit: "", xStep: 12, minY: 0 });
+      ], labels, { minY: 0, xStep: 18 });
     }
 
     async function loadWeather() {
@@ -518,12 +554,28 @@
       btn.textContent = "Refreshing…";
       pill.textContent = "Loading data…";
 
-      const url = buildUrl();
+      const preserveUrl = buildUrl(config.preserve);
+      const whitehorseUrl = buildUrl(config.whitehorse);
+      const airportUrl = buildUrl(config.airport);
+      const takhiniUrl = buildUrl(config.takhini);
+
       try {
-        const data = await getJson(url);
-        renderCurrent(data);
-        renderCharts(data);
-        safeText("api-summary", url);
+        const [preserveData, whitehorseData, airportData, takhiniData] = await Promise.all([
+          getJson(preserveUrl),
+          getJson(whitehorseUrl),
+          getJson(airportUrl),
+          getJson(takhiniUrl)
+        ]);
+
+        renderCurrent(preserveData);
+        renderStations([
+          { name: config.preserve.name, current: preserveData.current },
+          { name: config.whitehorse.name, current: whitehorseData.current },
+          { name: config.airport.name, current: airportData.current },
+          { name: config.takhini.name, current: takhiniData.current }
+        ]);
+        renderCharts(preserveData);
+        safeText("api-summary", [preserveUrl, whitehorseUrl, airportUrl, takhiniUrl].join("\n"));
         pill.textContent = "Loaded";
       } catch (error) {
         safeText("current-summary", `Could not load dashboard data: ${error.message}`);
